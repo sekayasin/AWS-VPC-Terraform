@@ -1,0 +1,61 @@
+---
+- hosts: all
+  become: yes
+
+  vars:
+    ansible_python_interpreter: "/usr/bin/python3"
+    DB_USER: postgres
+    DB_NAME: ah_zeus_db  
+
+  tasks: 
+    - name: Update packages...
+      apt: 
+        update-cache: yes
+    
+    - name: Upgrade packages...
+      apt: 
+        upgrade: safe
+     
+    - name: open ports on the firewall...
+      shell:
+        cmd: |
+          sudo ufw allow OpenSSH
+          sudo ufw allow 5432
+          sudo ufw reload
+        
+    - name: install postgresql and it's required dependencies...
+      apt: name={{ item }} update_cache=true state=latest
+      with_items:
+        - postgresql
+        - postgresql-contrib
+      tags: packages
+
+    - name: postgresql is running and started
+      service: name=postgresql state=started enabled=yes
+    
+    - name: Edit pg_hba.conf file to allow connection from anywhere
+      shell:
+        cmd: |
+          sudo echo "host    all    all    0.0.0.0/0     trust" >> /etc/postgresql/10/main/pg_hba.conf
+          sudo systemctl restart postgresql
+    
+    - name: Edit postgresql.conf file
+      shell:
+        cmd: |
+          sudo sed -i "s|#listen_addresses = 'localhost'|listen_addresses = '*'|g" /etc/postgresql/10/main/postgresql.conf
+          sudo systemctl restart postgresql
+    
+    - name: Create database
+      shell:
+        cmd: |
+          sudo -u postgres createdb ah_zeus_db
+          
+      
+    
+   
+
+
+      
+
+
+

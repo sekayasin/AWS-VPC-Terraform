@@ -1,0 +1,90 @@
+---
+- hosts: all
+  become: yes
+
+  vars:
+    ansible_python_interpreter: "/usr/bin/python3"
+    domain: "authorshaven-api.tk www.authorshaven-api.tk"  
+
+  tasks: 
+    - name: Update packages...
+      apt: 
+        update-cache: yes
+    
+    - name: Upgrade packages...
+      apt: 
+        upgrade: safe
+     
+    - name: open ports on the firewall...
+      shell:
+        cmd: |
+          sudo ufw allow OpenSSH
+          sudo ufw allow 8000
+          sudo ufw allow 80
+          sudo ufw reload
+          
+    - name: install latest nginx package...
+      apt: 
+        name: nginx 
+        state: latest
+    
+    - name: start nginx server...
+      service: 
+        name: nginx 
+        state: started
+
+    - name: clean nginx default config file...
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+    
+    - name: Add new nginx authorshaven config... 
+      file: 
+        path: /etc/nginx/sites-available/api
+        state: touch
+    
+    - name: configure file and Setup Reverse proxy to bind on port 8000...
+      blockinfile:
+        dest: /etc/nginx/sites-available/api
+        block: |
+          server {
+            listen 80;
+            server_name {{ domain }};
+
+            location / {
+              proxy_pass        http://localhost:8000;
+            }
+          }
+
+    - name: Link new nginx fastfoodfast config file to sites-enabled...
+      file:
+        src: /etc/nginx/sites-available/api
+        dest: /etc/nginx/sites-enabled/api
+        state: link
+    
+    - name: Restarting Nginx...
+      shell:
+        cmd: |
+          sudo systemctl restart nginx
+        
+    - name: install python3 and it's required dependencies...
+      apt: name={{ item }} update_cache=true state=latest
+      with_items:
+        - python3-pip
+        - python3-dev
+        - python3-venv
+        - libpq-dev
+      tags: packages
+    
+    - name: clone app repo from github...
+      git:
+        repo: "https://github.com/andela/ah-backend-zeus.git"
+        dest: "/home/ubuntu/ah-backend-zeus"
+        clone: yes
+   
+
+
+      
+
+
+

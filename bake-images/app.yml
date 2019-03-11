@@ -1,0 +1,148 @@
+---
+- hosts: all
+  become: yes
+
+  vars:
+    ansible_python_interpreter: "/usr/bin/python3"
+    domain: "authorshaven.tk www.authorshaven.tk"  
+
+  tasks: 
+    - name: Update packages...
+      apt: 
+        update-cache: yes
+    
+    - name: Upgrade packages...
+      apt: 
+        upgrade: safe
+     
+    - name: open ports on the firewall...
+      shell:
+        cmd: |
+          sudo ufw allow OpenSSH
+          sudo ufw allow 80
+          sudo ufw allow 443
+          sudo ufw reload
+          
+    - name: install latest nginx package...
+      apt: 
+        name: nginx 
+        state: latest
+    
+    - name: start nginx server...
+      service: 
+        name: nginx 
+        state: started
+
+    - name: clean nginx default config file...
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+    
+    - name: Add new nginx authorshaven config... 
+      file: 
+        path: /etc/nginx/sites-available/authorshaven
+        state: touch
+    
+    - name: configure file and Setup Reverse proxy to bind on port 3000...
+      blockinfile:
+        dest: /etc/nginx/sites-available/authorshaven
+        block: |
+          server {
+            listen 80;
+            server_name {{ domain }};
+
+            location / {
+              proxy_pass        http://localhost:3000;
+            }
+          }
+
+    - name: Link new nginx fastfoodfast config file to sites-enabled...
+      file:
+        src: /etc/nginx/sites-available/authorshaven
+        dest: /etc/nginx/sites-enabled/authorshaven
+        state: link
+    
+    - name: Restarting Nginx...
+      shell:
+        cmd: |
+          sudo systemctl restart nginx
+        
+       
+    - name: Add Nodejs's official GPG Key...
+      apt_key: 
+        url: "https://deb.nodesource.com/gpgkey/nodesource.gpg.key" 
+        state: present
+    
+    - name: Add Nodejs 10.x Source repository...
+      apt_repository: 
+        repo: "deb https://deb.nodesource.com/node_10.x bionic main" 
+        state: present 
+        update_cache: yes
+    
+    - name: install nodejs...
+      apt:
+        name: nodejs
+        state: present
+    
+    - name: install yarn package globally...
+      npm:
+        name: yarn
+        global: yes
+    
+    - name: clone app repo from github...
+      git:
+        repo: "https://github.com/andela/ah-frontend-zeus.git"
+        dest: "/home/ubuntu/ah-frontend-zeus"
+        clone: yes
+    
+    - name: install package dependencies...
+      yarn:
+        path: /home/ubuntu/ah-frontend-zeus
+    
+    - name: yarn build ...
+      shell:
+        cmd: |
+          cd /home/ubuntu/ah-frontend-zeus
+          sudo yarn build
+    
+    - name: Create a systemd authorshaven service to run the app...
+      file:
+        path: /etc/systemd/system/authorshaven.service
+        state: touch
+
+    - name: edit authorshaven.service file
+      blockinfile:
+        dest: /etc/systemd/system/authorshaven.service
+        block: |
+          [Unit]
+          Description=authorshaven Service - Service to start Authors Haven app
+          After=network.target
+
+          [Service]
+          ExecStart=/usr/bin/node /home/ubuntu/ah-frontend-zeus/server.js
+          Restart=on-failure
+          Type=simple
+          User=ubuntu
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Control authorshaven service with using systemctl...
+      shell:
+        cmd: |
+          sudo systemctl daemon-reload
+          sudo systemctl start authorshaven.service
+          sudo systemctl enable authorshaven.service
+   
+    
+    
+    
+
+
+
+
+
+      
+
+
+
